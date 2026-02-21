@@ -9,8 +9,14 @@ export const authentication = async (req, res, next) => {
     throw new Error("Token must not be empty");
   }
 
+  const [prefix, token] = authorization.split(" ");
+
+  if(prefix !== "Bearer"){
+    throw new Error("Invalid token prefix");
+  }
+
   const decoded = verifyToken({
-    token: authorization,
+    token,
     secret_key: "mohammed",
   });
 
