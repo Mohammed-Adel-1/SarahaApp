@@ -8,6 +8,10 @@ export const findOne = async ({ model, filter = {}, populate = "", select = {} }
     return await model.findOne(filter).populate(populate).select(select);
 };
 
+export const findById = async ({ model, id = {}, populate = "", select = {} } = {} ) => {
+    return await model.findById(id).populate(populate).select(select);
+};
+
 export const find = async ({ model, filter = {}, options = {} } = {} ) => {
     const doc = await model.find(filter);
 

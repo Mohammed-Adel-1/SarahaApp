@@ -1,4 +1,4 @@
-export const gendertEnum = {
+export const genderEnum = {
     male: "male",
     female: "female"
 }

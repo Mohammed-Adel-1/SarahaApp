@@ -1,6 +1,7 @@
 import { verifyToken } from "../utils/token.service.js";
 import * as db_service from "../../DB/db.service.js";
 import { userModel } from "../../DB/models/users.model.js";
+import { ACCESS_SECRET_KEY, TOKEN_PREFIX } from "../../../config/config.service.js";
 
 export const authentication = async (req, res, next) => {
   const { authorization } = req.headers;
@@ -11,13 +12,13 @@ export const authentication = async (req, res, next) => {
 
   const [prefix, token] = authorization.split(" ");
 
-  if(prefix !== "Bearer"){
+  if(prefix !== TOKEN_PREFIX){
     throw new Error("Invalid token prefix");
   }
 
   const decoded = verifyToken({
     token,
-    secret_key: "mohammed",
+    secret_key: ACCESS_SECRET_KEY,
   });
 
   if (!decoded || !decoded.id) {

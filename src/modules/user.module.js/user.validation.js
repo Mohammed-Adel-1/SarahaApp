@@ -1,27 +1,54 @@
 import joi from "joi"
-import { gendertEnum } from "../../common/enum/user.enum.js"
+import { genderEnum } from "../../common/enum/user.enum.js"
+import { general_rules } from "../../common/utils/generalRules.js";
 
 export const signUpSchema = {
+  body: joi.object({
+    userName: joi.string().trim().min(5).required(),
+    email: general_rules.email.required(),
+    password: general_rules.password.required(),
+    cPassword: general_rules.cPassword.required(),
+    gender: joi.string().valid(...Object.values(GenderEnum)).required(),
+    phone: joi.string().required(),
+  }).required(),
 
-    body:joi.object({
-    userName: joi.string().min(5).max(10).required(),
-    email: joi.string().emamin(20),
-    password: joi.string().required(),
-    cPassword: joi.string().valid(joi.ref("password")).required(),
-    gender: joi.string().valid(...Object.values(gendertEnum)).required(),
-    age: joi.number().positive().integer().required(),
-    }).required(),
+  file: general_rules.file.required(),
 
-    Query:joi.object({
-    x: joi.string().required(),
-    }).required()
+  files: joi.array().items(general_rules.file.required()).required(),
 
-}
+  files: joi.object({
+  attachment: joi.array().max(1).items(general_rules.file.required()).required(),
+  attachments: joi.array().max(3).items(general_rules.file.required()).required(),
+}).required(),
+
+};
 
 export const signInSchema = {
+  body: joi.object({
+    email: joi.string().email({ tlds: { allow: true }, minDomainSegments: 2, maxDomainSegments: 2 }),
+    password: joi.string().regex(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[a-zA-Z]).{8,}$/),
+  }).required()
+}
 
-    body:joi.object({
-    email: joi.string().required(),
-    password: joi.string().required(),
-    }).required(),
+export const shareProfileSchema = {
+  params: joi.object({
+    id: general_rules.id.required()
+  }).required()
+}
+
+export const updateProfileSchema = {
+  body: joi.object({
+    firstName: joi.string().trim().min(5)(),
+    lastName: joi.string().trim().min(5)(),
+    gender: joi.string().valid(...Object.values(GenderEnum))(),
+    phone: joi.string(),
+  }).required()
+}
+
+export const updatePasswordSchema = {
+  body: joi.object({
+    oldPassword: general_rules.password.required(),
+    newPassword: general_rules.password.required(),
+    cPassword: joi.string().valid(joi.ref("newPassword")),
+  }).required()
 }
