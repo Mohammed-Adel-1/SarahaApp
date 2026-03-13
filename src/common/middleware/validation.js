@@ -1,6 +1,8 @@
 
 export const validate = (schema) => {
     return async (req, res, next) => {
+        console.log(req.body);
+        console.log(req.file);
 
     let errorResults = [];
     

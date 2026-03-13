@@ -5,57 +5,56 @@ import { userModel } from "../../DB/models/users.model.js";
 import { successResponse } from "../../common/utils/response.success.js";
 import { decrypt,encrypt } from "../../common/utils/security/encryption.security.js";
 import { v4 as uuidv4 } from "uuid";
+import { randomUUID } from 'crypto'
 import { generateToken,verifyToken } from "../../common/utils/token.service.js";
 import { hash, compare } from "../../common/utils/security/hash.security.js";
 import { OAuth2Client } from "google-auth-library";
 import { SALT_ROUNDS, REFRESH_SECRET_KEY, ACCESS_SECRET_KEY } from "../../../config/config.service.js";
 import cloudinary from "../../common/utils/cloudinary.js";
+import { ref } from "node:process";
+import { revokeTokenModel } from "../../DB/models/revokeToken.model.js";
+import { deleteKey, get, get_key, keys, revoked_key, set } from "../../DB/redis/redis.service.js";
+import fs from "fs";
 
 export const signUp = async (req, res, next) => {
   const { userName, email, password, cPassword, gender, phone } = req.body;
 
-  console.log(req.file, "after");
+  // console.log(req.files, "after");
 
-  if (password !== cPassword) {
-    throw new Error("Password and Confirm Password are not the same", {
-      cause: 403,
-    });
+  if (await db_service.findOne({ model: userModel, filter: { email } })) {
+    throw new Error("Email already exists", { cause: 403 });
   }
 
-  // if (await db_service.findOne({ model: userModel, filter: { email } })) {
-  //   throw new Error("Email already exists", { cause: 403 });
-  // }
+  // const { public_id, secure_url } = await cloudinary.uploader.upload(req.file.path,{
+  //   folder: "sara7a_app/users",
+  //   // public_id:"mohammed",
+  //   // use_filename: true,
+  //   // unique_filename: false,
+  //   // resource_type:"video",
+  // });
 
-  const { public_id, secure_url } = await cloudinary.uploader.upload(req.file.path,{
-    folder: "sara7a_app/users",
-    // public_id:"mohammed",
-    // use_filename: true,
-    // unique_filename: false,
-    // resource_type:"video",
-  });
-
-  // let arr_path = [];
-  // for(const file of req.file.attachements){
-  //   arr_path.push(file.path)
-  // }
+  let arr_path = [];
+  for(const file of req.files.attachments){
+    arr_path.push(file.path)
+  }
 
   const user = await db_service.create({
     model: userModel,
     data: {
       userName,
       email,
-      password: hash({ plainText: password, saltRounds:SALT_ROUNDS }),
+      password: hash({ plainText: password, saltRounds:Number(SALT_ROUNDS) }),
       gender,
       phone: encrypt(phone),
-      profilePicture:{ public_id, secure_url },
-      // coverPictures: arr_path
+      profilePicture: req.files.attachment[0].path,
+      coverPictures: arr_path
     },
   });
   successResponse({
     res,
     status: 201,
     message: "User Created Successfully",
-    data: user,
+    // data: user,
   });
 };
 
@@ -94,10 +93,10 @@ export const signUpWithGmail = async (req, res, next) => {
   }
 
   const access_token = generateToken({
-    playload: { id: user._id, email: user.email },
-    sercret_key: SECRET_KEY,
+    payload: { id: user._id, email: user.email },
+    secret_key: SECRET_KEY,
     options: {
-      expiresIn: "1h",
+      expiresIn: 60 * 5,
     },
   });
 
@@ -124,12 +123,27 @@ export const signIn = async (req, res, next) => {
     throw new Error("Invalid Password", { cause: 400 });
   }
 
-  const access_token = generateToken({
-    playload: { id: user._id, email: user.email },
+  const jwtid = randomUUID();
 
-    sercret_key: ACCESS_SECRET_KEY,
+  const access_token = generateToken({
+    payload: { id: user._id, email: user.email },
+    secret_key: ACCESS_SECRET_KEY,
     options: {
       expiresIn: 60 * 5,
+      jwtid,
+      // noTimestamp: true,
+      // notBefore: "1m",
+      // jwtid: uuidv4()
+    },
+  });
+
+  const refresh_token = generateToken({
+    payload: { id: user._id, email: user.email },
+
+    secret_key: REFRESH_SECRET_KEY,
+    options: {
+      expiresIn: "1y",
+      jwtid,
       // noTimestamp: true,
       // notBefore: "1m",
       // jwtid: uuidv4()
@@ -140,12 +154,22 @@ export const signIn = async (req, res, next) => {
     res,
     status: 200,
     message: "User SignedIn Successfully",
-    data: { access_token },
+    data: { access_token, refresh_token },
   });
 };
 
 export const getProfile = async (req, res, next) => {
+
+  const key = `profile::${req.user._id}`;
+
+  const userExist = await get(key);
+  if(userExist){
+    return successResponse({ res, status: 200, message: "Done", data: userExist });
+  }
+
   req.user.phone = decrypt(req.user.phone);
+
+  await set({ key, value: req.user, ttl: 60});
   successResponse({ res, status: 200, message: "Done", data: req.user });
 };
 
@@ -167,13 +191,19 @@ export const shareProfile = async (req, res, next) => {
 };
 
 export const updateProfile = async (req, res, next) => {
-  const { firstName, lastName, genderm, phone } = req.params;
+  let { firstName, lastName, gender, phone } = req.body;
 
   if(phone) phone = encrypt(phone);
 
   const user = await db_service.findOneAndUpdate({
     model: userModel,
     filter: { id: req.user._id },
+    update:{
+      firstName,
+      lastName,
+      gender,
+      phone
+    },
     select: "-password"
   })
 
@@ -181,19 +211,22 @@ export const updateProfile = async (req, res, next) => {
     throw new Error("User not exist")
   }
 
+  await deleteKey(`profile::${req.user._id}`);
+
+  user.phone = decrypt(user.phone);
   successResponse({ res, status: 200, data: user });
 };
 
 export const updatePassword = async (req, res, next) => {
-  const { oldPassword, newPassword } = req.params;
+  const { oldPassword, newPassword } = req.body;
 
   if(!compare({ plainText: oldPassword, cipherText: req.user.password})){
     throw new Error("Password incorrect")
   }
 
-  const hash = hash({ plainText: newPassword});
+  const hashed = hash({ plainText: newPassword});
 
-  req.user.password = hash;
+  req.user.password = hashed;
 
   await req.user.save();
 
@@ -202,25 +235,31 @@ export const updatePassword = async (req, res, next) => {
 
 export const refreshToken = async (req, res, next) => {
 
-  const { autherization } = req.body;
+  const { authorization } = req.body;
 
-  if(!autherization){
+  if(!authorization){
     throw new Error("Token not exist");
   }
 
-  const decoded = verifyToken({ token: autherization, secret_key: REFRESH_SECRET_KEY});
+  const decoded = verifyToken({ token: authorization, secret_key: REFRESH_SECRET_KEY });
 
-  if(!decoded||!decoded.id){
-    throw new Error("INvalid Token");
+  
+  if(!decoded || !decoded.id){
+    throw new Error("Invalid Token");
   }
+  
+  const revokeToken = await db_service.findOne({ model: revokeTokenModel, filter: {tokenId: decoded.jti}})
+    if(revokeToken) {
+      throw new Error("Invalid token revoked");
+    }
 
   const user = await db_service.findOne({ model: userModel, filter: {_id: decoded.id}});
 
-  if(!user){ throw new Error("User not't exist", {cause: 400})}
+  if(!user){ throw new Error("User not exist", {cause: 400})}
 
   const access_token = generateToken({
-    playload: { id: user._id, email: user.email },
-    sercret_key: ACCESS_SECRET_KEY,
+    payload: { id: user._id, email: user.email },
+    secret_key: ACCESS_SECRET_KEY,
     options: {
       expiresIn: 60 * 5,
     }
@@ -229,4 +268,37 @@ export const refreshToken = async (req, res, next) => {
   successResponse({ res, message: "Success", data: access_token })
 
 
+};
+
+export const logout = async (req, res, next) => {
+  const { flag } = req.query;
+
+  if(flag === "all"){
+    req.user.changeCredential = new Date();
+    req.user.save();
+
+    await deleteKey(await keys(get_key(req.user._id)))
+  } else{
+
+    await set({
+    key: revoked_key({ userId: req.user._id, jti: req.decoded.jti }),
+    value: `${req.decoded.jti}`,
+    ttl: req.decoded.exp - Math.floor(Date.now() / 1000)
+  })
+  }
+
+  
+  successResponse({ res, message: "Loggedout successfully"})
+};
+
+export const remove_profile_image = async (req, res, next) => {
+
+fs.unlink(req.user.profilePicture, (err) => {
+  if (err) {
+    throw new Error("Failed to remove profile picture")
+  } else {
+  successResponse({ res, message: "Profile Image is successfully deleted"});
+  }
+});
+  
 };

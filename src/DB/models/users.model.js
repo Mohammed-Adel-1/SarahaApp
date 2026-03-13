@@ -37,14 +37,16 @@ const userSchema = mongoose.Schema(
             enum: Object.values(genderEnum),
             default: genderEnum.male
         },
-        profilePicture: {
-            public_id: {type: String, required: true},
-            secure_url: {type: String, required: true}
-        },
-        coverPictures: [{
-            public_id: {type: String, required: true},
-            secure_url: {type: String, required: true}
-        }],
+        // profilePicture: {
+        //     public_id: {type: String, required: true},
+        //     secure_url: {type: String, required: true}
+        // },
+        // coverPictures: [{
+        //     public_id: {type: String, required: true},
+        //     secure_url: {type: String, required: true}
+        // }],
+        profilePicture: {type: String, required: true},
+        coverPictures: [{type: String, required: true}],
         confirmed: Boolean,
         provider: {
             type: String,
@@ -58,6 +60,7 @@ const userSchema = mongoose.Schema(
             required: true
         },
         phone: String,
+        changeCredential: Date
     },
     {
         timeStamps:true,

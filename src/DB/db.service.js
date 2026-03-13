@@ -26,10 +26,14 @@ export const updateOne = async ({ model, filter = {}, update = {}, options = {} 
     return await model.updateOne(filter, update, {runValidators: true, ...options});
 };
 
-export const findOneAndUpdate = async ({ model, filter = {}, update = {}, options = {} } = {} ) => {
-    return await model.findOneAndUpdate(filter, update, {new: true, runValidators: true, ...options});
+export const findOneAndUpdate = async ({ model, filter = {}, update = {}, options = {}, select = {} } = {} ) => {
+    return await model.findOneAndUpdate(filter, update, {new: true, runValidators: true, ...options}).select(select);
 };
 
 export const deleteOne = async({ model, filter = {} = {} }) => {
     return await model.deleteOne(filter)
-}
+};
+
+export const deleteMany = async({ model, filter = {} = {} }) => {
+    return await model.deleteMany(filter)
+};

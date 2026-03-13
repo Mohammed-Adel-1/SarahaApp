@@ -13,7 +13,7 @@ export const multer_local = ({custom_path = "General", custom_types = []} = {}) 
             cb(null, full_path)
         },
         filename: (req, file, cb) => {
-            console.log(file, "before");
+            // console.log(file, "before");
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
             cb(null, uniqueSuffix + "_" + file.originalname)
         }
@@ -37,7 +37,7 @@ export const multer_host = ( custom_types = []) => {
     const storage = multer.diskStorage({});
 
     const fileFilter = (req, file, cb) => {
-        console.log(file, "before");
+        // console.log(file, "before");
         if(!custom_types.includes(file.mimetype)){
             cb(new Error("Invalid file type"))
         }

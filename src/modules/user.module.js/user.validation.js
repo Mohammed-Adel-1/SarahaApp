@@ -8,26 +8,28 @@ export const signUpSchema = {
     email: general_rules.email.required(),
     password: general_rules.password.required(),
     cPassword: general_rules.cPassword.required(),
-    gender: joi.string().valid(...Object.values(GenderEnum)).required(),
+    gender: joi.string().valid(...Object.values(genderEnum)).required(),
     phone: joi.string().required(),
   }).required(),
 
-  file: general_rules.file.required(),
+  // file: general_rules.file.required(),
 
-  files: joi.array().items(general_rules.file.required()).required(),
+  // files: joi.array().items(general_rules.file.required()).required(),
 
   files: joi.object({
   attachment: joi.array().max(1).items(general_rules.file.required()).required(),
-  attachments: joi.array().max(3).items(general_rules.file.required()).required(),
+  attachments: joi.array().max(2).items(general_rules.file.required()).required(),
 }).required(),
 
 };
 
 export const signInSchema = {
   body: joi.object({
-    email: joi.string().email({ tlds: { allow: true }, minDomainSegments: 2, maxDomainSegments: 2 }),
-    password: joi.string().regex(/^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[a-zA-Z]).{8,}$/),
-  }).required()
+    email: general_rules.email.required(),
+    password: general_rules.password.required(),
+  }).required().messages({
+    "any.required": "body is required"
+  })
 }
 
 export const shareProfileSchema = {
@@ -38,9 +40,9 @@ export const shareProfileSchema = {
 
 export const updateProfileSchema = {
   body: joi.object({
-    firstName: joi.string().trim().min(5)(),
-    lastName: joi.string().trim().min(5)(),
-    gender: joi.string().valid(...Object.values(GenderEnum))(),
+    firstName: joi.string().trim().min(3),
+    lastName: joi.string().trim().min(3),
+    gender: joi.string().valid(...Object.values(genderEnum)),
     phone: joi.string(),
   }).required()
 }

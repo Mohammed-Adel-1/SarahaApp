@@ -9,7 +9,7 @@ export const general_rules = {
     
     id: joi.string().custom((value, helper) => {
         const isValid = Types.ObjectId.isValid(value);
-        return isvalid ? value : helper.message("invalid id");
+        return isValid ? value : helper.message("invalid id");
     }),
     
 
