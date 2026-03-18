@@ -1,14 +1,77 @@
 import { redisClient } from "./redis.db.js";
 
-export const revoked_key = (userId, jti)=> {
-    return `revoke_token::${userId}::${jti}`;
+export const revoked_key = ({ userId, jti }) => {
+  return `revoke_token::${userId}::${jti}`;
 };
 
 export const get_key = (userId)=> {
     return `revoke_token::${userId}`;
 };
 
-export const set = async ({ key, value, ttl} = {})=> {
+
+export const confirm_email_otp_key = (email)=> {
+    return `otp::${email}::confirm-email`;
+};
+
+export const confirm_email_tries_otp_key = (email)=> {
+    return `${confirm_email_otp_key(email)}::max_tries`;
+};
+
+export const confirm_email_block_otp_key = (email)=> {
+    return `${confirm_email_otp_key(email)}::block`;
+};
+
+
+export const reset_password_otp_key = (email)=> {
+    return `otp::${email}::reset-password`;
+};
+
+export const reset_password_tries_otp_key = (email)=> {
+    return `${reset_password_otp_key(email)}::max_tries`;
+};
+
+export const reset_password_block_otp_key = (email)=> {
+    return `${reset_password_otp_key(email)}::block`;
+};
+
+
+export const login_tries_key = (email)=> {
+    return `login::${email}::login-tries`;
+};
+
+export const login_blocked_key = (email)=> {
+    return `login::${email}::blocked`;
+};
+
+export const reset_tries_key = (email)=> {
+    return `reset::${email}::reset-tries`;
+};
+
+export const reset_blocked_key = (email)=> {
+    return `reset::${email}::blocked`;
+};
+
+export const twoFA_otp_key = (email)=> {
+    return `2FA::${email}`;
+};
+
+export const login_otp_key = (email)=> {
+    return `login::${email}`;
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const setValue = async ({ key, value, ttl} = {})=> {
     try {
         const data = typeof value === "string" ? value : JSON.stringify(value);
         return ttl ? await redisClient.set(key, data, { EX: ttl }) : await redisClient.set(key, data);
@@ -70,5 +133,13 @@ export const keys = async (pattern)=> {
         return await redisClient.keys(`${pattern}*`);
     } catch (error) {
         console.log("Error to get keys in redis", error);
+    }
+};
+
+export const incr = async (key)=> {
+    try {
+        return await redisClient.incr(`${key}`);
+    } catch (error) {
+        console.log("Fail to increment key", error);
     }
 };

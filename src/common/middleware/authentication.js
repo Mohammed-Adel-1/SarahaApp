@@ -2,7 +2,6 @@ import { verifyToken } from "../utils/token.service.js";
 import * as db_service from "../../DB/db.service.js";
 import { userModel } from "../../DB/models/users.model.js";
 import { ACCESS_SECRET_KEY, TOKEN_PREFIX } from "../../../config/config.service.js";
-import { revokeTokenModel } from "../../DB/models/revokeToken.model.js";
 import { get, revoked_key } from "../../DB/redis/redis.service.js";
 
 export const authentication = async (req, res, next) => {
@@ -35,10 +34,10 @@ export const authentication = async (req, res, next) => {
   }
 
   if(user?.changeCredential?.getTime() > decoded.iat * 1000){
-    throw new Error("Invalid token");
+    throw new Error("Invalid token, loggedout");
   }
 
-  const revokeToken = await get({key: revoked_key({ userId: user._id, jti: decoded.jti })})
+  const revokeToken = await get(revoked_key({ userId: user._id, jti: decoded.jti }));
   if(revokeToken) {
     throw new Error("Invalid token revoked");
   }

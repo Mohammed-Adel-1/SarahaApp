@@ -3,6 +3,7 @@ import { genderEnum, providerEnum, roleEnum } from "../../common/enum/user.enum.
 
 
 
+
 const userSchema = mongoose.Schema(
     {
         firstName:{
@@ -60,7 +61,8 @@ const userSchema = mongoose.Schema(
             required: true
         },
         phone: String,
-        changeCredential: Date
+        changeCredential: Date,
+        twoFA: Boolean, 
     },
     {
         timeStamps:true,

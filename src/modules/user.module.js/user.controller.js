@@ -17,6 +17,17 @@ userRouter.post("/signUp", multer_local({ custom_path: "users", custom_types: mu
     {name: "attachments", maxCount: 2}
 ]),validate(UV.signUpSchema), us.signUp);
 userRouter.post("/signup/gmail", us.signUpWithGmail);
+userRouter.patch("/confirm-email",validate(UV.confirmEmailSchema), us.confirmEmail);
+userRouter.post("/resend-otp", us.resendOtp);
+userRouter.post("/forget-password", us.forgetPassword);
+userRouter.post("/reset-password", validate(UV.resetPasswordSchema), us.resetPassword);
+
+userRouter.post("/enable-2FA", authentication, us.enable2FA);
+userRouter.post("/verify-2FA", authentication, us.verify2FA);
+userRouter.post("/login-confirmation",validate(UV.confirmEmailSchema), us.loginConfirmation);
+
+
+
 userRouter.post("/signIn", validate(UV.signInSchema), us.signIn);
 userRouter.get("/profile", authentication, us.getProfile);
 userRouter.patch("/update-profile", validate(UV.updateProfileSchema), authentication, us.updateProfile);

@@ -30,13 +30,13 @@ export const signInSchema = {
   }).required().messages({
     "any.required": "body is required"
   })
-}
+};
 
 export const shareProfileSchema = {
   params: joi.object({
     id: general_rules.id.required()
   }).required()
-}
+};
 
 export const updateProfileSchema = {
   body: joi.object({
@@ -45,12 +45,28 @@ export const updateProfileSchema = {
     gender: joi.string().valid(...Object.values(genderEnum)),
     phone: joi.string(),
   }).required()
-}
+};
 
 export const updatePasswordSchema = {
   body: joi.object({
     oldPassword: general_rules.password.required(),
     newPassword: general_rules.password.required(),
-    cPassword: joi.string().valid(joi.ref("newPassword")),
+    cPassword: joi.string().valid(joi.ref("newPassword")).required(),
   }).required()
-}
+};
+
+export const confirmEmailSchema = {
+  body: joi.object({
+    email: general_rules.email.required(),
+    code: joi.string().regex(/^\d{6}$/).required(),
+  }).required()
+};
+
+export const resetPasswordSchema = {
+  body: joi.object({
+    email: general_rules.email.required(),
+    code: joi.string().regex(/^\d{6}$/).required(),
+    newPassword: general_rules.password.required(),
+    cPassword: joi.string().valid(joi.ref("newPassword")).required(),
+  }).required()
+};
