@@ -12,14 +12,14 @@ export const findById = async ({ model, id = {}, populate = "", select = {} } = 
     return await model.findById(id).populate(populate).select(select);
 };
 
-export const find = async ({ model, filter = {}, options = {} } = {} ) => {
-    const doc = await model.find(filter);
+export const find = async ({ model, filter = {}, options = {} } = {}) => {
+    let query = model.find(filter);
 
-    if(options.populate) doc.populate(options.populate);
-    if(options.skip) doc.skip(options.skip);
-    if(options.limit) doc.limit(options.limit);
+    if (options.populate) query = query.populate(options.populate);
+    if (options.skip) query = query.skip(options.skip);
+    if (options.limit) query = query.limit(options.limit);
 
-    return doc.exec();
+    return await query.exec();
 };
 
 export const updateOne = async ({ model, filter = {}, update = {}, options = {} } = {} ) => {

@@ -9,55 +9,66 @@ export const get_key = (userId)=> {
 };
 
 
-export const confirm_email_otp_key = (email)=> {
-    return `otp::${email}::confirm-email`;
+export const otp_key = ({email, subject} = {})=> {
+    return `otp::${email}::${subject}`;
 };
 
-export const confirm_email_tries_otp_key = (email)=> {
-    return `${confirm_email_otp_key(email)}::max_tries`;
+export const max_otp_key = ({email, subject} = {})=> {
+    return `${otp_key({email, subject})}::max_tries`;
 };
 
-export const confirm_email_block_otp_key = (email)=> {
-    return `${confirm_email_otp_key(email)}::block`;
-};
-
-
-export const reset_password_otp_key = (email)=> {
-    return `otp::${email}::reset-password`;
-};
-
-export const reset_password_tries_otp_key = (email)=> {
-    return `${reset_password_otp_key(email)}::max_tries`;
-};
-
-export const reset_password_block_otp_key = (email)=> {
-    return `${reset_password_otp_key(email)}::block`;
+export const blocked_otp_key = ({email, subject} = {})=> {
+    return `${otp_key({email, subject})}::block`;
 };
 
 
-export const login_tries_key = (email)=> {
-    return `login::${email}::login-tries`;
+export const tries_key = ({email, subject} = {})=> {
+    return `tries::${email}::${subject}`;
 };
 
-export const login_blocked_key = (email)=> {
-    return `login::${email}::blocked`;
+export const blocked_key = ({email, subject} = {})=> {
+    return `blocked::${email}::${subject}`;
 };
 
-export const reset_tries_key = (email)=> {
-    return `reset::${email}::reset-tries`;
-};
 
-export const reset_blocked_key = (email)=> {
-    return `reset::${email}::blocked`;
-};
+// export const reset_password_otp_key = (email)=> {
+//     return `otp::${email}::reset-password`;
+// };
 
-export const twoFA_otp_key = (email)=> {
-    return `2FA::${email}`;
-};
+// export const reset_password_tries_otp_key = (email)=> {
+//     return `${reset_password_otp_key(email)}::max_tries`;
+// };
 
-export const login_otp_key = (email)=> {
-    return `login::${email}`;
-};
+// export const reset_password_block_otp_key = (email)=> {
+//     return `${reset_password_otp_key(email)}::block`;
+// };
+
+
+
+
+// export const login_tries_key = (email)=> {
+//     return `login::${email}::login-tries`;
+// };
+
+// export const login_blocked_key = (email)=> {
+//     return `login::${email}::blocked`;
+// };
+
+// export const reset_tries_key = (email)=> {
+//     return `reset::${email}::reset-tries`;
+// };
+
+// export const reset_blocked_key = (email)=> {
+//     return `reset::${email}::blocked`;
+// };
+
+// export const twoFA_otp_key = (email)=> {
+//     return `2FA::${email}`;
+// };
+
+// export const login_otp_key = (email)=> {
+//     return `login::${email}`;
+// };
 
 
 

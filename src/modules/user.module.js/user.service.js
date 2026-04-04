@@ -22,31 +22,67 @@ import {
 } from "../../../config/config.service.js";
 import cloudinary from "../../common/utils/cloudinary.js";
 import { ref } from "node:process";
-import {
-  confirm_email_block_otp_key,
-  deleteKey,
-  exists,
-  get,
-  get_key,
-  incr,
-  keys,
-  login_blocked_key,
-  login_tries_key,
-  confirm_email_tries_otp_key,
-  confirm_email_otp_key,
-  revoked_key,
-  setValue,
-  ttl,
-  reset_password_otp_key,
-  reset_password_tries_otp_key,
-  reset_password_block_otp_key,
-  reset_blocked_key,
-  reset_tries_key,
-  twoFA_otp_key,
-  login_otp_key,
-} from "../../DB/redis/redis.service.js";
+import {deleteKey,get,get_key,incr,keys,revoked_key,setValue,ttl,otp_key,max_otp_key,blocked_otp_key,tries_key,blocked_key,} from "../../DB/redis/redis.service.js";
 import fs from "fs";
 import { generateOTP, sendEmail } from "../../common/utils/email/send.email.js";
+import { eventEmitter } from "../../common/utils/email/email.events.js";
+import { emailTemplate } from "../../common/utils/email/email.template.js";
+import { emailEnum } from "../../common/enum/email.enum.js";
+import { blockEnum } from "../../common/enum/block.enum.js";
+import crypto from "crypto";
+
+const sendEmailOtp = async ({email, subject} = {}) => {
+  const isBlocked = await ttl(blocked_otp_key({email, subject}));
+  if (isBlocked > 0) {
+    throw new Error(`You are blocked from resending otp, please try again after ${isBlocked} seconds`,
+    );
+  }
+
+  const otpTTL = await ttl(otp_key({email, subject}));
+  if (otpTTL > 0) {
+    throw new Error(`You can resend otp after ${otpTTL} seconds`);
+  }
+
+  if (await get(max_otp_key({email, subject})) >= 3) {
+    await setValue({key: blocked_otp_key({email, subject}), value: 1,ttl: 60 * 10,});
+    throw new Error("You have exceeded the maximum number of tries");
+  }
+
+  const otp = await generateOTP();
+  eventEmitter.emit(emailEnum.confirmEmail, async()=> {
+    await sendEmail({
+    to: email,
+    subject: "Welcome to Saraha App",
+    html: emailTemplate(otp),
+  });
+
+  await setValue({
+    key: otp_key({email, subject}),
+    value: hash({ plainText: `${otp}` }),
+    ttl: 60 * 2,
+  });
+
+  await incr(max_otp_key({email, subject}));
+})
+};
+
+const checkBlocked = async ({email, subject, tries = 5} = {}) => {
+  const isBlocked = await ttl(blocked_key({email, subject}));
+  if (isBlocked > 0) {
+    throw new Error(
+      `You are blocked from logging in, try again after ${isBlocked} seconds`,
+    );
+  }
+
+  const numOfTries = await get(tries_key({email, subject}));
+  if (numOfTries >= tries) {
+    setValue({ key: blocked_key({email, subject}), value: 1, ttl: 60 * 5 });
+    throw new Error("You have exceeded the maximum number of tries");
+  }
+
+  await incr(tries_key({email, subject}));
+};
+
 
 export const signUp = async (req, res, next) => {
   const { userName, email, password, cPassword, gender, phone } = req.body;
@@ -82,26 +118,29 @@ export const signUp = async (req, res, next) => {
       coverPictures: arr_path,
     },
   });
-
+  
   const otp = await generateOTP();
+
+  eventEmitter.emit(emailEnum.confirmEmail, async()=> {
   await sendEmail({
     to: email,
     subject: "Welcome to Saraha App",
-    html: `<h1>Hello ${userName}</h1>
-    <p>Welcome to Saraha App, your OTP for confirming Email is: ${otp}`,
+    html: emailTemplate(otp),
   });
 
   await setValue({
-    key: confirm_email_otp_key(email),
+    key: otp_key({email, subject: emailEnum.confirmEmail}),
     value: hash({ plainText: `${otp}` }),
     ttl: 60 * 2,
   });
 
   await setValue({
-    key: confirm_email_tries_otp_key(email),
+    key: max_otp_key({email, subject: emailEnum.confirmEmail}),
     value: 1,
     ttl: 60 * 7,
   });
+  });
+  
 
   successResponse({
     res,
@@ -164,24 +203,7 @@ export const signUpWithGmail = async (req, res, next) => {
 export const signIn = async (req, res, next) => {
   const { email, password } = req.body;
 
-  const isBlocked = await ttl(login_blocked_key(email));
-  if (isBlocked > 0) {
-    throw new Error(
-      `You are blocked from logging in, try again after ${isBlocked} seconds`,
-    );
-  }
-
-  const numOfTries = await get(login_tries_key(email));
-  if (numOfTries >= 5) {
-    setValue({ key: login_blocked_key(email), value: 1, ttl: 60 * 5 });
-    throw new Error("You have exceeded the maximum number of tries");
-  }
-
-  if (!(await exists(login_tries_key(email)))) {
-    await setValue({ key: login_tries_key(email), value: 1, ttl: 60 * 3 });
-  } else {
-    await incr(login_tries_key(email));
-  }
+   await checkBlocked({email, subject:blockEnum.login, tries: 5});
 
   const user = await db_service.findOne({
     model: userModel,
@@ -200,19 +222,7 @@ export const signIn = async (req, res, next) => {
   }
 
   if (user.twoFA === true) {
-    const otp = await generateOTP();
-    await sendEmail({
-      to: email,
-      subject: "Welcome to Saraha App",
-      html: `<h1>Hello ${user.userName}</h1>
-    <p>Welcome to Saraha App, your OTP for logging in is: ${otp}`,
-    });
-
-    await setValue({
-      key: login_otp_key(email),
-      value: hash({ plainText: `${otp}` }),
-      ttl: 60 * 2,
-    });
+    await sendEmailOtp({email, subject: emailEnum.twoFALogin});
 
     successResponse({
       res,
@@ -329,6 +339,7 @@ export const updatePassword = async (req, res, next) => {
   const hashed = hash({ plainText: newPassword });
 
   req.user.password = hashed;
+  req.user.changeCredential = new Date();
 
   await req.user.save();
 
@@ -422,7 +433,9 @@ export const remove_profile_image = async (req, res, next) => {
 export const confirmEmail = async (req, res, next) => {
   const { email, code } = req.body;
 
-  const otpValue = await get(confirm_email_otp_key(email));
+  await checkBlocked({email, subject: blockEnum.confirmEmail, tries: 1});
+
+  const otpValue = await get(otp_key({email, subject: emailEnum.confirmEmail}));
   if (!otpValue) {
     throw new Error("OTP Expired");
   }
@@ -443,8 +456,8 @@ export const confirmEmail = async (req, res, next) => {
 
   if (!user) throw new Error("User not exist");
 
-  await deleteKey(confirm_email_otp_key(email));
-  await deleteKey(confirm_email_tries_otp_key(email));
+  await deleteKey(otp_key({email, subject: emailEnum.confirmEmail}));
+  await deleteKey(max_otp_key({email, subject: emailEnum.confirmEmail}));
 
   successResponse({ res, message: "Email confirmed successfully" });
 };
@@ -452,29 +465,7 @@ export const confirmEmail = async (req, res, next) => {
 export const resendOtp = async (req, res, next) => {
   const { email } = req.body;
 
-  const isBlocked = await ttl(confirm_email_block_otp_key(email));
-  if (isBlocked > 0) {
-    throw new Error(
-      `You are blocked from resending otp, please try again after ${isBlocked} seconds`,
-    );
-  }
-
-  const otpTTL = await ttl(confirm_email_otp_key(email));
-  if (otpTTL > 0) {
-    throw new Error(`You can resend otp after ${otpTTL} seconds`);
-  }
-
-  const maxOtp = await get(confirm_email_tries_otp_key(email));
-  if (maxOtp >= 3) {
-    await setValue({
-      key: confirm_email_block_otp_key(email),
-      value: 1,
-      ttl: 60 * 10,
-    });
-    throw new Error("You have exceeded the maximum number of tries");
-  }
-
-  const user = await db_service.findOne({
+    const user = await db_service.findOne({
     model: userModel,
     filter: {
       email,
@@ -485,21 +476,8 @@ export const resendOtp = async (req, res, next) => {
 
   if (!user) throw new Error("User not exist");
 
-  const otp = await generateOTP();
-  await sendEmail({
-    to: email,
-    subject: "Welcome to Saraha App",
-    html: `<h1>Hello ${user.userName}</h1>
-    <p>Welcome to Saraha App, your OTP for confirming Email is: ${otp}`,
-  });
+    await sendEmailOtp({email, subject: emailEnum.confirmEmail});
 
-  await setValue({
-    key: confirm_email_otp_key(email),
-    value: hash({ plainText: `${otp}` }),
-    ttl: 60 * 2,
-  });
-
-  await incr(confirm_email_tries_otp_key(email));
 
   successResponse({ res, message: "Opt is resended" });
 };
@@ -507,126 +485,76 @@ export const resendOtp = async (req, res, next) => {
 export const forgetPassword = async (req, res, next) => {
   const { email } = req.body;
 
-  const isBlocked = await ttl(reset_password_block_otp_key(email));
-  if (isBlocked > 0) {
-    throw new Error(
-      `You are blocked from reseting password, please try again after ${isBlocked} seconds`,
-    );
-  }
-
-  const otpTTL = await ttl(reset_password_otp_key(email));
-  if (otpTTL > 0) {
-    throw new Error(`You can resend otp after ${otpTTL} seconds`);
-  }
-
-  const max_tries = await get(reset_password_tries_otp_key(email));
-  if (max_tries >= 3) {
-    await setValue({
-      key: reset_password_block_otp_key(email),
-      value: 1,
-      ttl: 60 * 10,
-    });
-    throw new Error("You have exceeded the maximum number of tries");
-  }
-
   const user = await db_service.findOne({
     model: userModel,
-    filter: { email, confirmed: true, provider: providerEnum.system },
+    filter: {
+      email,
+      confirmed: true,
+      provider: providerEnum.system,
+    },
   });
 
-  if (!user) {
-    throw new Error("User not exist");
-  }
+  if (!user) throw new Error("User not exist");
 
-  const otp = await generateOTP();
-  await sendEmail({
+    eventEmitter.emit(emailEnum.confirmEmail, async()=> {
+      
+    const token = crypto.randomBytes(32).toString("hex");
+
+    await sendEmail({
     to: email,
     subject: "Welcome to Saraha App",
-    html: `<h1>Hello ${user.userName}</h1>
-    <p>Welcome to Saraha App, your OTP for reseting your password is: ${otp}`,
+    html: emailTemplate({otp: `http://localhost:3000/users/reset-password/?token=${token}`}),
   });
+
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
   await setValue({
-    key: reset_password_otp_key(email),
-    value: hash({ plainText: `${otp}` }),
+    key: `magic_link:${hashedToken}`,
+    value: user._id.toString(),
     ttl: 60 * 2,
   });
+})
 
-  if (!(await exists(reset_password_tries_otp_key(email)))) {
-    await setValue({
-      key: reset_password_tries_otp_key(email),
-      value: 1,
-      ttl: 60 * 7,
-    });
-  } else {
-    await incr(reset_password_tries_otp_key(email));
-  }
-
-  successResponse({ res, message: "Otp for reseting password is sent" });
+  successResponse({ res, message: "link for reseting password is sent" });
 };
 
 export const resetPassword = async (req, res, next) => {
-  const { email, code, newPassword } = req.body;
+  const { newPassword } = req.body;
 
-  const isBlocked = await ttl(reset_blocked_key(email));
-  if (isBlocked > 0) {
-    throw new Error(
-      `You are blocked from reseting password, please try again after ${isBlocked} seconds`,
-    );
-  }
+  // const otpValue = await get(otp_key({email, subject: emailEnum.forgetPassword}));
+  // if (!otpValue) {
+  //   throw new Error("OTP Expired");
+  // }
 
-  const max_tries = await get(reset_tries_key(email));
-  if (max_tries >= 3) {
-    await setValue({ key: reset_blocked_key(email), value: 1, ttl: 60 * 10 });
-    throw new Error("You have exceeded the maximum number of tries");
-  }
-
-  if (!(await exists(reset_tries_key(email)))) {
-    await setValue({ key: reset_tries_key(email), value: 1, ttl: 60 * 5 });
-  } else {
-    await incr(reset_tries_key(email));
-  }
-
-  const otpValue = await get(reset_password_otp_key(email));
-  if (!otpValue) {
-    throw new Error("OTP Expired");
-  }
-
-  if (!compare({ plainText: code, cipherText: `${otpValue}` })) {
-    throw new Error("Incorrect OTP");
-  }
+  // if (!compare({ plainText: code, cipherText: `${otpValue}` })) {
+  //   throw new Error("Incorrect OTP");
+  // }
 
   const user = await db_service.findOneAndUpdate({
     model: userModel,
-    filter: { email, confirmed: true, provider: providerEnum.system },
+    filter: { _id: req.userId, confirmed: true, provider: providerEnum.system },
     update: {
       password: hash({
         plainText: newPassword,
         saltRounds: Number(SALT_ROUNDS),
       }),
+      changeCredential: new Date(),
     },
   });
 
-  await deleteKey(reset_password_otp_key(email));
-  await deleteKey(reset_password_tries_otp_key(email));
+  if (!user) throw new Error("User not exist");
+
+  // await deleteKey(otp_key({email, subject: emailEnum.forgetPassword}));
+  // await deleteKey(max_otp_key({email, subject: emailEnum.forgetPassword}));
+
+  await deleteKey(`magic_link:${req.hashedToken}`)
 
   successResponse({ res, message: "Password is reseted successfully" });
 };
 
 export const enable2FA = async (req, res, next) => {
-  const otp = await generateOTP();
-  await sendEmail({
-    to: req.user.email,
-    subject: "Welcome to Saraha App",
-    html: `<h1>Hello ${req.user.userName}</h1>
-    <p>Welcome to Saraha App, your OTP for enabling 2FA is: ${otp}`,
-  });
+  await sendEmailOtp({email: req.user.email, subject: emailEnum.twoFAconfirmation});
 
-  await setValue({
-    key: twoFA_otp_key(req.user.email),
-    value: hash({ plainText: `${otp}` }),
-    ttl: 60 * 2,
-  });
 
   successResponse({ res, message: "2FA otp is sent" });
 };
@@ -634,7 +562,7 @@ export const enable2FA = async (req, res, next) => {
 export const verify2FA = async (req, res, next) => {
   const { code } = req.body;
 
-  const otpValue = await get(twoFA_otp_key(req.user.email));
+  const otpValue = await get(otp_key({email: req.user.email, subject: emailEnum.twoFAconfirmation}));
   if (!otpValue) {
     throw new Error("OTP has Expired");
   }
@@ -646,15 +574,15 @@ export const verify2FA = async (req, res, next) => {
   req.user.twoFA = true;
   req.user.save();
 
-  await deleteKey(twoFA_otp_key(req.user.email));
+  await deleteKey(otp_key({email: req.user.email, subject: emailEnum.twoFAconfirmation}));
 
-  successResponse({ res, message: "Enabled 2FA successfully" });
+  successResponse({ res, message: "2FA is Enabled successfully" });
 };
 
 export const loginConfirmation = async (req, res, next) => {
   const { email, code } = req.body;
 
-  const otpValue = await get(login_otp_key(email));
+  const otpValue = await get(otp_key({email, subject: emailEnum.twoFALogin}));
   if (!otpValue) {
     throw new Error("OTP has Expired");
   }
@@ -698,7 +626,7 @@ export const loginConfirmation = async (req, res, next) => {
     },
   });
 
-  await deleteKey(login_otp_key(email));
+  await deleteKey(otp_key({email, subject: emailEnum.twoFALogin}));
 
   successResponse({
     res,

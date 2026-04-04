@@ -22,7 +22,7 @@ export const general_rules = {
         filename: joi.string().required(),
         path: joi.string().required(),
         size: joi.number().required(),
-      }).required().messages({
+      }).messages({
         "any.required": "file is required"
       }),
 }

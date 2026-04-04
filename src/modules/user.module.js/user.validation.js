@@ -64,9 +64,19 @@ export const confirmEmailSchema = {
 
 export const resetPasswordSchema = {
   body: joi.object({
-    email: general_rules.email.required(),
-    code: joi.string().regex(/^\d{6}$/).required(),
     newPassword: general_rules.password.required(),
     cPassword: joi.string().valid(joi.ref("newPassword")).required(),
+  }).required()
+};
+
+export const resendOtpSchema = {
+  body: joi.object({
+    email: general_rules.email.required(),
+  }).required()
+};
+
+export const verify2FaSchema = {
+  body: joi.object({
+    code: joi.string().regex(/^\d{6}$/).required(),
   }).required()
 };
